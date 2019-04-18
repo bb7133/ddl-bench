@@ -44,18 +44,32 @@ def count():
 
 
 def bench_create_table(conn):
-    while True:
+    logging.info("Test `CREATE TABLE` benchmark")
+    with conn.cursor() as cursor:
+        db_name = "create_table_bench"
+        logging.info("Use `%s` as test database, truncate it first" % db_name)
+        sql = "DROP DATABASE IF EXISTS `%s`" % db_name
+        cursor.execute(sql)
+        sql = "CREATE DATABASE `%s`" % db_name
+        cursor.execute(sql)
+        sql = "USE `%s`" % db_name
+        cursor.execute(sql)
         try:
-            with conn.cursor() as cursor:
-                rand_name = uuid.uuid1()
-                sql = "CREATE TABLE `%s`(a int)" % rand_name
-                cursor.execute(sql)
-                count()
-        except (KeyboardInterrupt, SystemExit):
-            logging.info("Exit...")
-            raise
-        except Exception as e:
-            report(e)
+            while True:
+                try:
+                    rand_name = uuid.uuid1()
+                    sql = "CREATE TABLE `%s`(a int)" % rand_name
+                    cursor.execute(sql)
+                    count()
+                except (KeyboardInterrupt, SystemExit):
+                    logging.info("Exit...")
+                    raise
+                except Exception as e:
+                    report(e)
+        finally:
+            sql = "DROP DATABASE IF EXISTS `%s`" % db_name
+            cursor.execute(sql)
+            logging.info("Dropped database `%s`" % db_name)
 
 def report(e):
     global e_num
@@ -77,7 +91,7 @@ if __name__ == '__main__':
     #         port=4000,
     #         user='root',
     #         password='admin',
-    #         db='create_table_bench',
+    #         db='mysql',
     #         charset='utf8mb4',
     #         cursorclass=pymysql.cursors.DictCursor)
     conn = pymysql.connect(
@@ -85,7 +99,7 @@ if __name__ == '__main__':
             port=4000,
             user='root',
             password='',
-            db='create_table_bench',
+            db='mysql',
             charset='utf8mb4',
             cursorclass=pymysql.cursors.DictCursor)
 
