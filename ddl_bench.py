@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
 
+import getopt
 import logging
 import json
 import os
@@ -19,6 +20,9 @@ except ImportError:
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 DATE_FORMAT = "%m/%d/%Y %H:%M:%S %p"
+USAGE = """
+Usage: ...
+"""
 
 MAX_E_NUM = 10
 e_num = 0
@@ -28,8 +32,33 @@ table_num = 0
 
 last_ts = None
 
+draw_graph = True
 
-def count():
+
+# TODO: A very temporary solution that get TiDB server memory usage
+import psutil
+server_p = psutil.Process(23708)
+
+
+def draw():
+    if draw_graph:
+        import matplotlib.pyplot as plt
+        import numpy as np
+        x = np.linspace(0, 2 * np.pi, 50)
+        plt.plot(x, np.sin(x), 'r-x', label='Sin(x)')
+        plt.plot(x, np.cos(x), 'g-^', label='Cos(x)')
+        plt.legend()
+        plt.xlabel('Rads')
+        plt.ylabel('Amplitude')
+        plt.title('Sin and Cos Waves')
+        plt.show()
+
+
+def get_mem():
+    return server_p.memory_percent() * 80
+
+
+def count(fout):
     global last_ts
     global table_num
     if last_ts is None:
@@ -38,8 +67,19 @@ def count():
     table_num += 1
     if table_num % TABLE_NUM_TRIGGER == 0:
         now = time.time()
-        cps = int(TABLE_NUM_TRIGGER / (now - last_ts))
-        print "Created %d tables, cps for last %d table is: %d" % (table_num, TABLE_NUM_TRIGGER, cps)
+        duration = int((now - last_ts) * 1000 / TABLE_NUM_TRIGGER)
+        r = {
+                "tables": table_num,
+                "duration": duration,
+                "memory": get_mem()
+        }
+        # print "Created %d tables, average duration for last %d creations: %d ms" % (table_num, TABLE_NUM_TRIGGER, duration)
+        r_str = json.dumps(r)
+        logging.info(r_str)
+
+        fout.write(r_str)
+        fout.write("\n")
+
         last_ts = now
 
 
@@ -54,22 +94,19 @@ def bench_create_table(conn):
         cursor.execute(sql)
         sql = "USE `%s`" % db_name
         cursor.execute(sql)
-        try:
+        logging.info("Benchmark start")
+        with open('bench.result', 'w') as fout:
             while True:
                 try:
                     rand_name = uuid.uuid1()
                     sql = "CREATE TABLE `%s`(a int)" % rand_name
                     cursor.execute(sql)
-                    count()
+                    count(fout)
                 except (KeyboardInterrupt, SystemExit):
                     logging.info("Exit...")
                     raise
                 except Exception as e:
                     report(e)
-        finally:
-            sql = "DROP DATABASE IF EXISTS `%s`" % db_name
-            cursor.execute(sql)
-            logging.info("Dropped database `%s`" % db_name)
 
 def report(e):
     global e_num
@@ -85,25 +122,43 @@ def report(e):
 
 if __name__ == '__main__':
     logging.basicConfig(format=LOG_FORMAT, datefmt=DATE_FORMAT, level="INFO")
+
+    username = "root"
+    password = "admin"
+    host = "localhost"
+    port = 4000
+
+    try:
+        opts, args = getopt.getopt(sys.argv[1:],"h:p:P:u:", ["host=", "port=", "username=", "password=", "help", "draw"])
+    except getopt.GetoptError:
+        print >> sys.stderr, USAGE
+        sys.exit(-1)
+    for opt, arg in opts:
+        if opt in ("--help"):
+            print >> sys.stderr, USAGE
+            sys.exit(-1)
+        elif opt in ("-h", "--host"):
+            host = arg
+        elif opt in ("-P", "--port"):
+            port = int(arg)
+        elif opt in ("-p", "--password"):
+            password = arg
+        elif opt in ("-u", "--user"):
+            username = arg
+        elif opt in ("--draw"):
+            draw_graph = True
+
     # Connect to the database
-    # conn = pymysql.connect(
-    #         host='10.128.11.15',
-    #         port=4000,
-    #         user='root',
-    #         password='admin',
-    #         db='mysql',
-    #         charset='utf8mb4',
-    #         cursorclass=pymysql.cursors.DictCursor)
     conn = pymysql.connect(
-            host='localhost',
-            port=4000,
-            user='root',
-            password='',
+            host=host,
+            port=port,
+            user=username,
+            password=password,
             db='mysql',
             charset='utf8mb4',
             cursorclass=pymysql.cursors.DictCursor)
 
-    logging.info("Connected to %s" % str(conn))
+    logging.info("Connected to [%s:%d]" % (host, port))
     try:
         bench_create_table(conn)
     finally:
