@@ -27,17 +27,12 @@ Usage: ...
 MAX_E_NUM = 10
 e_num = 0
 
-TABLE_NUM_TRIGGER = 1000
+TABLE_NUM_TRIGGER = 100
 table_num = 0
 
 last_ts = None
 
 draw_graph = True
-
-
-# TODO: A very temporary solution that get TiDB server memory usage
-import psutil
-server_p = psutil.Process(23708)
 
 
 def draw():
@@ -55,19 +50,26 @@ def draw():
 
 
 def get_mem():
-    return server_p.memory_percent() * 80
+    try:
+        import requests
+        r = requests.get("http://localhost:9090/api/v1/query?query=go_memstats_heap_inuse_bytes")
+        val = json.loads(r.content)
+        if val["status"] == "success":
+            for result in val["data"]["result"]:
+                if result["metric"]["exported_job"] == "tidb":
+                    return int(result["value"][1])
+    except Exception as e:
+        logging.warn("Error getting memory: %s" % str(e))
+        pass
+    return None
 
 
-def count(fout):
-    global last_ts
+def count(fout, duration):
     global table_num
-    if last_ts is None:
-        last_ts = time.time()
 
     table_num += 1
     if table_num % TABLE_NUM_TRIGGER == 0:
         now = time.time()
-        duration = int((now - last_ts) * 1000 / TABLE_NUM_TRIGGER)
         r = {
                 "tables": table_num,
                 "duration": duration,
@@ -79,8 +81,7 @@ def count(fout):
 
         fout.write(r_str)
         fout.write("\n")
-
-        last_ts = now
+        fout.flush()
 
 
 def bench_create_table(conn):
@@ -100,8 +101,9 @@ def bench_create_table(conn):
                 try:
                     rand_name = uuid.uuid1()
                     sql = "CREATE TABLE `%s`(a int)" % rand_name
+                    t = time.time()
                     cursor.execute(sql)
-                    count(fout)
+                    count(fout, int((time.time() - t) * 1000))
                 except (KeyboardInterrupt, SystemExit):
                     logging.info("Exit...")
                     raise
@@ -124,7 +126,7 @@ if __name__ == '__main__':
     logging.basicConfig(format=LOG_FORMAT, datefmt=DATE_FORMAT, level="INFO")
 
     username = "root"
-    password = "admin"
+    password = ""
     host = "localhost"
     port = 4000
 
