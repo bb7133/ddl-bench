@@ -147,7 +147,7 @@ if __name__ == '__main__':
             port = int(arg)
         elif opt in ("-p", "--password"):
             password = arg
-        elif opt in ("-u", "--user"):
+        elif opt in ("-u", "--username"):
             username = arg
         elif opt in ("--draw"):
             draw_graph = True
