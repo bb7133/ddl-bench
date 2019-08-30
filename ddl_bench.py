@@ -50,18 +50,19 @@ def draw():
 
 
 def get_mem():
-    try:
-        import requests
-        r = requests.get("http://localhost:9090/api/v1/query?query=go_memstats_heap_inuse_bytes")
-        val = json.loads(r.content)
-        if val["status"] == "success":
-            for result in val["data"]["result"]:
-                if result["metric"]["exported_job"] == "tidb":
-                    return int(result["value"][1])
-    except Exception as e:
-        logging.warn("Error getting memory: %s" % str(e))
-        pass
-    return None
+    return 0
+#    try:
+#        import requests
+#        r = requests.get("http://localhost:7090/api/v1/query?query=go_memstats_heap_inuse_bytes")
+#        val = json.loads(r.content)
+#        if val["status"] == "success":
+#            for result in val["data"]["result"]:
+#                if result["metric"]["exported_job"] == "tidb":
+#                    return int(result["value"][1])
+#    except Exception as e:
+#        logging.warn("Error getting memory: %s" % str(e))
+#        pass
+#    return None
 
 
 def count(fout, duration):
@@ -99,7 +100,8 @@ def bench_create_table(conn):
         with open('bench.result', 'w') as fout:
             while True:
                 try:
-                    rand_name = uuid.uuid1()
+                    # rand_name = uuid.uuid1()
+                    rand_name = "test_table_%d" % table_num
                     sql = "CREATE TABLE `%s`(a int)" % rand_name
                     t = time.time()
                     cursor.execute(sql)
